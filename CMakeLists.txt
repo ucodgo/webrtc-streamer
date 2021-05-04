@@ -147,6 +147,10 @@ add_definitions(-DOPENSSL_API_1_1)
 target_link_libraries (${CMAKE_PROJECT_NAME} civetweb) 
 target_include_directories(civetweb PUBLIC civetweb/include) 
 
+#cxxopts
+add_definitions(-DCXXOPTS_NO_RTTI)
+target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC cxxopts/include) 
+
 # compiler specific
 if (WIN32)
     # overide compilation flags
@@ -155,10 +159,6 @@ if (WIN32)
       string(REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
     endforeach()
 
-    # getopt
-    add_library (getopt getopt/getopt.c)
-    target_include_directories(getopt PUBLIC getopt) 
-    target_link_libraries (${CMAKE_PROJECT_NAME} getopt)
     # live555helper
     add_definitions(-DNO_GETIFADDRS)
     # webrtc

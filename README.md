@@ -83,26 +83,26 @@ It is possible to specify cmake parameters WEBRTCROOT & WEBRTCDESKTOPCAPTURE :
 
 Usage
 ===============
-	./webrtc-streamer [-H http port] [-S[embeded stun address]] -[v[v]]  [url1]...[urln]
-	./webrtc-streamer [-H http port] [-s[external stun address]] -[v[v]] [url1]...[urln]
+	./webrtc-streamer [-H http port] [-S [embeded stun address]] -[v[v]]  [url1]...[urln]
+	./webrtc-streamer [-H http port] [-s [external stun address]] -[v[v]] [url1]...[urln]
 	./webrtc-streamer -V
-        	-v[v[v]]           : verbosity
-        	-V                 : print version
+		-v [level]         : verbosity (default:3)
+		-V                 : print version
 
-        	-H [hostname:]port : HTTP server binding (default 0.0.0.0:8000)
+		-H [hostname:]port : HTTP server binding (default 0.0.0.0:8000)
 		-w webroot         : path to get files
 		-c sslkeycert      : path to private key and certificate for HTTPS
 		-N nbthreads       : number of threads for HTTP server
 		-A passwd          : password file for HTTP server access
 		-D authDomain      : authentication domain for HTTP server access (default:mydomain.com)
 
-		-S[stun_address]                   : start embeded STUN server bind to address (default 0.0.0.0:3478)
-		-s[stun_address]                   : use an external STUN server (default:stun.l.google.com:19302 , -:means no STUN)
-		-t[username:password@]turn_address : use an external TURN relay server (default:disabled)
-		-T[username:password@]turn_address : start embeded TURN server (default:disabled)
+		-S [stun_address]                   : start embeded STUN server bind to address (default 0.0.0.0:3478)
+		-s [stun_address]                   : use an external STUN server (default:stun.l.google.com:19302 , -:means no STUN)
+		-t [username:password@]turn_address : use an external TURN relay server (default:disabled)
+		-T [username:password@]turn_address : start embeded TURN server (default:disabled)
 		
-		-a[audio layer]                    : spefify audio capture layer to use (default:0)		
-		-q[filter]                         : spefify publish filter (default:.*)
+		-a [audio layer]                    : spefify audio capture layer to use (default:0)		
+		-q [filter]                         : spefify publish filter (default:.*)
 		-o                                 : use null codec (keep frame encoded)
 
 		-C config.json                     : load urls from JSON config file 
@@ -139,9 +139,9 @@ Using embedded STUN/TURN server behind a NAT:
 
 It is possible start embeded ICE server and publish its url using:
 
-    ./webrtc-streamer -S0.0.0.0:3478 -s$(curl -s ifconfig.me):3478
-    ./webrtc-streamer -s- -T0.0.0.0:3478 -tturn:turn@$(curl -s ifconfig.me):3478
-    ./webrtc-streamer -S0.0.0.0:3478 -s$(curl -s ifconfig.me):3478 -T0.0.0.0:3479 -tturn:turn@$(curl -s ifconfig.me):3479
+    ./webrtc-streamer -S 0.0.0.0:3478 -s $(curl -s ifconfig.me):3478
+    ./webrtc-streamer -s - -T 0.0.0.0:3478 -t turn:turn@$(curl -s ifconfig.me):3478
+    ./webrtc-streamer -S 0.0.0.0:3478 -s $(curl -s ifconfig.me):3478 -T 0.0.0.0:3479 -t turn:turn@$(curl -s ifconfig.me):3479
 The command `curl -s ifconfig.me` is getting the public IP, it could also given as a static parameter.
 
 In order to configure the NAT rules using the upnp feature of the router, it is possible to use [upnpc](https://manpages.debian.org/unstable/miniupnpc/upnpc.1.en.html) like this:

@@ -23,9 +23,7 @@
 #include "PeerConnectionManager.h"
 #include "HttpServerRequestHandler.h"
 
-#if WIN32
-#include "getopt.h"
-#endif
+#include "cxxopts.hpp"
 
 PeerConnectionManager* webRtcServer = NULL;
 
@@ -43,18 +41,17 @@ void sighandler(int n)
 ** -------------------------------------------------------------------------*/
 int main(int argc, char* argv[])
 {
-	const char* turnurl       = "";
+	std::string stunurl       = "stun.l.google.com:19302";
 	const char* defaultlocalstunurl  = "0.0.0.0:3478";
-	const char* localstunurl  = NULL;
+	std::string localstunurl;
+	std::string turnurl;
 	const char* defaultlocalturnurl  = "turn:turn@0.0.0.0:3478";
-	const char* localturnurl  = NULL;
-	const char* stunurl       = "stun.l.google.com:19302";
-	std::string defaultWebrtcUdpPortRange = "0:65535";
-	std::string localWebrtcUdpPortRange = "";
+	std::string localturnurl;
+	std::string webrtcUdpPortRange = "0:65535";
 	int logLevel              = rtc::LERROR;
-	const char* webroot       = "./html";
+	std::string webroot       = "./html";
 	std::string sslCertificate;
-	webrtc::AudioDeviceModule::AudioLayer audioLayer = webrtc::AudioDeviceModule::kPlatformDefaultAudio;
+	int audioLayer = webrtc::AudioDeviceModule::kPlatformDefaultAudio;
 	std::string streamName;
 	std::string nbthreads;
 	std::string passwdFile;
@@ -72,103 +69,86 @@ int main(int argc, char* argv[])
 	}
 	httpAddress.append(httpPort);
 
-	int c = 0;
-	while ((c = getopt (argc, argv, "hVv::" "c:H:w:N:A:D:C:" "T::t:S::s::" "a::q:o" "n:u:U:" "R:")) != -1)
-	{
-		switch (c)
-		{
-			case 'H': httpAddress = optarg; break;
-			case 'c': sslCertificate = optarg; break;
-			case 'w': webroot = optarg; break;
-			case 'N': nbthreads = optarg; break;
-			case 'A': passwdFile = optarg; break;
-			case 'D': authDomain = optarg; break;
 
-			case 'T': localturnurl = optarg ? optarg : defaultlocalturnurl; turnurl = localturnurl; break;
-			case 't': turnurl = optarg; break;
-			case 'S': localstunurl = optarg ? optarg : defaultlocalstunurl; stunurl = localstunurl; break;
-			case 's': stunurl = optarg ? optarg : defaultlocalstunurl; break;
-			
-			case 'a': audioLayer = optarg ? (webrtc::AudioDeviceModule::AudioLayer)atoi(optarg) : webrtc::AudioDeviceModule::kDummyAudio; break;
-			case 'q': publishFilter = optarg ; break;
-			case 'o': useNullCodec = true; break;
-				
-			case 'C': {
-				std::ifstream stream(optarg);
-				stream >> config;
-				break;
-			}
+    cxxopts::Options options(argv[0], "WebRTC Streamer");
 
-			case 'n': streamName = optarg; break;
-			case 'u': {
-				if (!streamName.empty()) {
-					config["urls"][streamName]["video"] = optarg; 
-				}
-			}
-			break;
-			case 'U': {
-				if (!streamName.empty()) {
-					config["urls"][streamName]["audio"] = optarg; 
-				}
-			}
-			break;
-			
-			case 'v': 
-				logLevel--; 
-				if (optarg) {
-					logLevel-=strlen(optarg); 
-				}
-			break;			
-			case 'V':
-				std::cout << VERSION << std::endl;
-				exit(0);
-			break;
-			case 'R':
-				std::cout << " First log " << std::endl;
-				localWebrtcUdpPortRange = optarg ? optarg : defaultWebrtcUdpPortRange;
-				std::cout << localWebrtcUdpPortRange << " [-R defaultWebrtcUdpPortRange]" << std::endl;
-				break;
-			case 'h':
-			default:
-				std::cout << argv[0] << " [-H http port] [-S[embeded stun address]] [-t [username:password@]turn_address] -[v[v]]  [url1]...[urln]" << std::endl;
-				std::cout << argv[0] << " [-H http port] [-s[externel stun address]] [-t [username:password@]turn_address] -[v[v]] [url1]...[urln]" << std::endl;
-				std::cout << argv[0] << " -V" << std::endl;
+    options.add_options()
+		("h,help", "Print usage")
+		("V,version", "print version")
+		("v,verbose", "set verbosity level", cxxopts::value<int>(logLevel)->implicit_value(std::to_string(rtc::WARNING)))
 
-				std::cout << "\t -v[v[v]]           : verbosity"                                                                  << std::endl;
-				std::cout << "\t -V                 : print version"                                                              << std::endl;
+		("C,config", "load urls from JSON config file", cxxopts::value<std::string>())
+		("o,nullcodec", "use null codec (keep frame encoded)", cxxopts::value<bool>(useNullCodec))
+		("a,audiolayer", "spefify audio capture layer to use", cxxopts::value<int>(audioLayer)->implicit_value(std::to_string(webrtc::AudioDeviceModule::kDummyAudio)))
+		("q,publishfilter", "spefify publish filter", cxxopts::value<std::string>()->default_value(publishFilter))
 
-				std::cout << "\t -H hostname:port   : HTTP server binding (default "   << httpAddress    << ")"                   << std::endl;
-				std::cout << "\t -w webroot         : path to get files"                                                          << std::endl;
-				std::cout << "\t -c sslkeycert      : path to private key and certificate for HTTPS"                              << std::endl;
-				std::cout << "\t -N nbthreads       : number of threads for HTTP server"                                          << std::endl;
-				std::cout << "\t -A passwd          : password file for HTTP server access"                                       << std::endl;
-				std::cout << "\t -D authDomain      : authentication domain for HTTP server access (default:mydomain.com)"        << std::endl;
-			
-				std::cout << "\t -S[stun_address]                   : start embeded STUN server bind to address (default " << defaultlocalstunurl << ")" << std::endl;
-				std::cout << "\t -s[stun_address]                   : use an external STUN server (default:" << stunurl << " , -:means no STUN)"         << std::endl;
-				std::cout << "\t -t[username:password@]turn_address : use an external TURN relay server (default:disabled)"       << std::endl;
-				std::cout << "\t -T[username:password@]turn_address : start embeded TURN server (default:disabled)"				  << std::endl;
+		("R,udprange", "Set the webrtc udp port range", cxxopts::value<std::string>()->default_value(webrtcUdpPortRange))
+		("S,localstun", "start embeded STUN server bind to address", cxxopts::value<std::string>()->implicit_value(defaultlocalstunurl))
+		("s,stun", "use a STUN server (- means no STUN)", cxxopts::value<std::string>()->default_value(stunurl))
+		("T,localturn", "start embeded TURN server bind to address (default:disabled)", cxxopts::value<std::string>()->implicit_value(defaultlocalturnurl))
+		("t,turn", "use a TURN server (default:disabled)", cxxopts::value<std::string>())
 
-				std::cout << "\t -a[audio layer]                    : spefify audio capture layer to use (default:" << audioLayer << ")"          << std::endl;
-				std::cout << "\t -q[filter]                         : spefify publish filter (default:" << publishFilter << ")"          << std::endl;
-				std::cout << "\t -o                                 : use null codec (keep frame encoded)"                 << std::endl;
+        ("H,httpaddress", "HTTP server binding", cxxopts::value<std::string>()->default_value(httpAddress))
+        ("c,cert", "path to private key and certificate for HTTPS", cxxopts::value<std::string>())
+		("w,webroot", "path to get static files", cxxopts::value<std::string>()->default_value(webroot))
+		("N,nbthreads", "number of threads for HTTP server", cxxopts::value<std::string>())
+		("A,passwd", "password file for HTTP server access", cxxopts::value<std::string>())
+		("D,domain", "authentication domain for HTTP server access", cxxopts::value<std::string>()->default_value(authDomain))
+    ;
 
-				std::cout << "\t -n name -u videourl -U audiourl    : register a stream with name using url"               << std::endl;			
-				std::cout << "\t [url]                              : url to register in the source list"                  << std::endl;
-				std::cout << "\t -C config.json                     : load urls from JSON config file"                     << std::endl;
-
-				std::cout << "\t -R [Udp port range min:max]        : Set the webrtc udp port range (default 0:65534)"     << std::endl;
-			
-				exit(0);
-		}
+    cxxopts::ParseResult result = options.parse(argc, argv);
+    if (result.count("help")) {
+      std::cout << options.help() << std::endl;
+      exit(0);
+    }
+    if (result.count("version")) {
+      std::cout << VERSION << std::endl;
+      exit(0);
+    }
+    if (result.count("verbose")) {
+		logLevel=result["verbose"].as<int>(); 
+    }	
+    if (result.count("config")) {
+		std::ifstream stream(result["config"].as<std::string>());
+		stream >> config;
+    }	
+	httpAddress = result["httpaddress"].as<std::string>();
+	if (result.count("cert")) {
+		sslCertificate = result["cert"].as<std::string>();
 	}
-
-	while (optind<argc)
-	{
-		std::string url(argv[optind]);
-		config["urls"][url]["video"] = url; 
-		optind++;
+	webroot = result["webroot"].as<std::string>();
+	if (result.count("nbthreads")) {	
+		nbthreads = result["nbthreads"].as<std::string>();
 	}
+	authDomain = result["domain"].as<std::string>();
+
+	publishFilter = result["publishfilter"].as<std::string>();
+	if (result.count("nullcodec")) {
+		useNullCodec = result["nullcodec"].as<bool>();
+	}
+	if (result.count("audio")) {
+		audioLayer = result["audio"].as<int>();
+	}		
+	if (result.count("udprange")) {
+		webrtcUdpPortRange = result["udprange"].as<std::string>();
+	}	
+	if (result.count("localstun")) {
+		localstunurl = result["localstun"].as<std::string>();
+		stunurl = localstunurl;
+	}	
+	if (result.count("stun")) {
+		stunurl = result["stun"].as<std::string>();
+	}	
+	if (result.count("localturn")) {
+		localturnurl = result["localturn"].as<std::string>();
+		turnurl = localturnurl;
+	}			
+	if (result.count("turn")) {
+		turnurl = result["turn"].as<std::string>();
+	}	
+
+	auto arguments = result.arguments();
+    std::cout << "Saw " << arguments.size() << " arguments" << std::endl;
 
 	std::cout  << "Version:" << VERSION << std::endl;
 
@@ -184,17 +164,17 @@ int main(int argc, char* argv[])
 
 	// webrtc server
 	std::list<std::string> iceServerList;
-	if ((strlen(stunurl) != 0) && (strcmp(stunurl,"-") != 0)) {
+	if ((stunurl.size() != 0) && (stunurl != "-")) {
 		iceServerList.push_back(std::string("stun:")+stunurl);
 	}
-	if (strlen(turnurl)) {
+	if (turnurl.size() != 0) {
 		iceServerList.push_back(std::string("turn:")+turnurl);
 	}
 
 	// init trials fields
 	webrtc::field_trial::InitFieldTrialsFromString("WebRTC-FrameDropper/Disabled/");
 
-	webRtcServer = new PeerConnectionManager(iceServerList, config["urls"], audioLayer, publishFilter, localWebrtcUdpPortRange, useNullCodec);
+	webRtcServer = new PeerConnectionManager(iceServerList, config["urls"], (webrtc::AudioDeviceModule::AudioLayer)audioLayer, publishFilter, webrtcUdpPortRange, useNullCodec);
 	if (!webRtcServer->InitializePeerConnection())
 	{
 		std::cout << "Cannot Initialize WebRTC server" << std::endl;
@@ -241,7 +221,7 @@ int main(int argc, char* argv[])
 
 			// start STUN server if needed
 			std::unique_ptr<cricket::StunServer> stunserver;
-			if (localstunurl != NULL)
+			if (!localstunurl.empty())
 			{
 				rtc::SocketAddress server_addr;
 				server_addr.FromString(localstunurl);
@@ -255,7 +235,7 @@ int main(int argc, char* argv[])
 
 			// start TRUN server if needed
 			std::unique_ptr<cricket::TurnServer> turnserver;
-			if (localturnurl != NULL)
+			if (!localturnurl.empty())
 			{
 				std::istringstream is(localturnurl);
 				std::string addr;
